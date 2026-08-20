@@ -1,0 +1,10 @@
+{
+  "rewrites": [
+    { "source": "/admin", "destination": "/admin.html" },
+    { "source": "/api/auth", "destination": "/api/auth.js" },
+    { "source": "/api/areas", "destination": "/api/areas.js" },
+    { "source": "/api/blog", "destination": "/api/blog.js" },
+    { "source": "/api/mensagens", "destination": "/api/mensagens.js" },
+    { "source": "/api/equipe", "destination": "/api/equipe.js" }
+  ]
+}
