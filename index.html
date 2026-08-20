@@ -979,16 +979,26 @@
     hamburger.setAttribute('aria-expanded', 'false');
   }
 
-  // Formulário → WhatsApp
+  // Formulário → salva no painel admin + abre WhatsApp
   function enviarWhatsApp(e) {
     e.preventDefault();
-    const nome = document.getElementById('nome').value.trim();
-    const tel  = document.getElementById('telefone').value.trim();
-    const area = document.getElementById('area').value;
-    const msg  = document.getElementById('mensagem').value.trim();
+    const nome  = document.getElementById('nome').value.trim();
+    const tel   = document.getElementById('telefone').value.trim();
+    const email = document.getElementById('email').value.trim();
+    const area  = document.getElementById('area').value;
+    const msg   = document.getElementById('mensagem').value.trim();
     if (!nome || !tel) { alert('Por favor, preencha nome e telefone.'); return; }
     const areaMap = { trabalhista:'Trabalhista', civel:'Cível', empresarial:'Empresarial', outro:'Outro' };
-    const texto = `Olá! Meu nome é ${nome}.\nTelefone: ${tel}\nÁrea: ${areaMap[area]||'Não informada'}\n\n${msg||'Gostaria de mais informações.'}`;
+    const areaLabel = areaMap[area] || 'Não informada';
+
+    // Salva a mensagem no painel admin (não bloqueia o envio pro WhatsApp se falhar)
+    fetch('/api/mensagens', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ nome, telefone: tel, email, area: areaLabel, mensagem: msg })
+    }).catch(() => {});
+
+    const texto = `Olá! Meu nome é ${nome}.\nTelefone: ${tel}\nÁrea: ${areaLabel}\n\n${msg||'Gostaria de mais informações.'}`;
     window.open(`https://wa.me/5589981225667?text=${encodeURIComponent(texto)}`, '_blank');
   }
 

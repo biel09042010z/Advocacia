@@ -511,35 +511,36 @@
 <div class="toast" id="toast"></div>
 
 <script>
-/* ══ CONFIG SUPABASE ══ */
-const SB_URL = 'SUPABASE_URL_AQUI';
-const SB_KEY = 'SUPABASE_ANON_KEY_AQUI';
-const HDR = {
-  'apikey': SB_KEY,
-  'Authorization': `Bearer ${SB_KEY}`,
-  'Content-Type': 'application/json',
-  'Prefer': 'return=representation'
-};
+/* ══ CONFIG API (Neon via serverless functions) ══ */
+function authHeaders() {
+  const token = sessionStorage.getItem('adv_token');
+  return {
+    'Content-Type': 'application/json',
+    ...(token ? { 'Authorization': `Bearer ${token}` } : {})
+  };
+}
 
-/* ══ SUPABASE HELPERS ══ */
-async function sbGet(table, filter='', order='') {
-  const qs = [filter, order ? 'order='+order : ''].filter(Boolean).join('&');
-  const r = await fetch(`${SB_URL}/rest/v1/${table}?${qs}`, { headers: HDR });
-  if (!r.ok) throw new Error(await r.text());
+/* ══ API HELPERS ══
+   endpoint: 'areas' | 'blog' | 'mensagens' | 'equipe'         */
+async function apiGet(endpoint, query = '') {
+  const r = await fetch(`/api/${endpoint}${query}`, { headers: authHeaders() });
+  if (!r.ok) throw new Error((await r.json().catch(() => ({}))).error || 'Erro ao carregar dados.');
   return r.json();
 }
-async function sbInsert(table, body) {
-  const r = await fetch(`${SB_URL}/rest/v1/${table}`, { method:'POST', headers: HDR, body: JSON.stringify(body) });
-  if (!r.ok) throw new Error(await r.text());
+async function apiPost(endpoint, body) {
+  const r = await fetch(`/api/${endpoint}`, { method: 'POST', headers: authHeaders(), body: JSON.stringify(body) });
+  if (!r.ok) throw new Error((await r.json().catch(() => ({}))).error || 'Erro ao salvar.');
   return r.json();
 }
-async function sbUpdate(table, filter, body) {
-  const r = await fetch(`${SB_URL}/rest/v1/${table}?${filter}`, { method:'PATCH', headers: HDR, body: JSON.stringify(body) });
-  if (!r.ok) throw new Error(await r.text());
+async function apiPatch(endpoint, body) {
+  const r = await fetch(`/api/${endpoint}`, { method: 'PATCH', headers: authHeaders(), body: JSON.stringify(body) });
+  if (!r.ok) throw new Error((await r.json().catch(() => ({}))).error || 'Erro ao atualizar.');
+  return r.json();
 }
-async function sbDelete(table, filter) {
-  const r = await fetch(`${SB_URL}/rest/v1/${table}?${filter}`, { method:'DELETE', headers: HDR });
-  if (!r.ok) throw new Error(await r.text());
+async function apiDelete(endpoint, id) {
+  const r = await fetch(`/api/${endpoint}`, { method: 'DELETE', headers: authHeaders(), body: JSON.stringify({ id }) });
+  if (!r.ok) throw new Error((await r.json().catch(() => ({}))).error || 'Erro ao excluir.');
+  return r.json();
 }
 
 /* ══ STATE ══ */
@@ -564,16 +565,16 @@ async function tryLogin() {
   errEl.textContent = '';
 
   try {
-    const res = await fetch(`${SB_URL}/auth/v1/token?grant_type=password`, {
+    const res = await fetch(`/api/auth`, {
       method: 'POST',
-      headers: { 'apikey': SB_KEY, 'Content-Type': 'application/json' },
+      headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ email, password: pwd })
     });
     const data = await res.json();
-    if (!res.ok) throw new Error(data.error_description || data.msg || 'Credenciais inválidas.');
+    if (!res.ok) throw new Error(data.error || 'Credenciais inválidas.');
 
-    sessionStorage.setItem('adv_token', data.access_token);
-    sessionStorage.setItem('adv_user', data.user?.email || email);
+    sessionStorage.setItem('adv_token', data.token);
+    sessionStorage.setItem('adv_user', data.email || email);
 
     document.getElementById('loginScreen').style.display = 'none';
     document.getElementById('adminScreen').style.display = 'flex';
@@ -587,13 +588,6 @@ async function tryLogin() {
 }
 
 async function logout() {
-  const token = sessionStorage.getItem('adv_token');
-  if (token) {
-    await fetch(`${SB_URL}/auth/v1/logout`, {
-      method: 'POST',
-      headers: { 'apikey': SB_KEY, 'Authorization': `Bearer ${token}` }
-    }).catch(() => {});
-  }
   sessionStorage.removeItem('adv_token');
   sessionStorage.removeItem('adv_user');
   document.getElementById('adminScreen').style.display = 'none';
@@ -638,7 +632,7 @@ async function init() {
    ÁREAS DE ATUAÇÃO
 ══════════════════════════════════════════════════ */
 async function loadAreas() {
-  areas = await sbGet('areas_atuacao', '', 'ordem');
+  areas = await apiGet('areas');
   renderAreasTable();
 }
 
@@ -680,12 +674,12 @@ async function saveArea() {
   try {
     const payload = { titulo, icone, descricao: desc, topicos, ativa };
     if (editingAreaId) {
-      await sbUpdate('areas_atuacao', `id=eq.${editingAreaId}`, payload);
+      await apiPatch('areas', { id: editingAreaId, ...payload });
       const idx = areas.findIndex(a => a.id === editingAreaId);
       if (idx > -1) areas[idx] = { ...areas[idx], ...payload };
       editingAreaId = null;
     } else {
-      const [row] = await sbInsert('areas_atuacao', { ...payload, ordem: areas.length + 1 });
+      const row = await apiPost('areas', { ...payload, ordem: areas.length + 1 });
       areas.push(row);
     }
     clearAreaForm();
@@ -714,7 +708,7 @@ function editArea(id) {
 async function deleteArea(id) {
   if (!confirm('Excluir esta área?')) return;
   try {
-    await sbDelete('areas_atuacao', `id=eq.${id}`);
+    await apiDelete('areas', id);
     areas = areas.filter(a => a.id !== id);
     renderAreasTable();
     showToast('🗑 Área removida.');
@@ -732,7 +726,7 @@ function clearAreaForm() {
    BLOG
 ══════════════════════════════════════════════════ */
 async function loadArtigos() {
-  artigos = await sbGet('blog_artigos', '', 'criado_em.desc');
+  artigos = await apiGet('blog', '?all=1');
   renderArtigosTable();
 }
 
@@ -776,12 +770,12 @@ async function saveArtigo() {
   try {
     const payload = { titulo, categoria, leitura, resumo, conteudo, publicado };
     if (editingArtigoId) {
-      await sbUpdate('blog_artigos', `id=eq.${editingArtigoId}`, payload);
+      await apiPatch('blog', { id: editingArtigoId, ...payload });
       const idx = artigos.findIndex(a => a.id === editingArtigoId);
       if (idx > -1) artigos[idx] = { ...artigos[idx], ...payload };
       editingArtigoId = null;
     } else {
-      const [row] = await sbInsert('blog_artigos', { ...payload, criado_em: new Date().toISOString() });
+      const row = await apiPost('blog', payload);
       artigos.unshift(row);
     }
     clearArtigoForm();
@@ -811,7 +805,7 @@ function editArtigo(id) {
 async function deleteArtigo(id) {
   if (!confirm('Excluir este artigo?')) return;
   try {
-    await sbDelete('blog_artigos', `id=eq.${id}`);
+    await apiDelete('blog', id);
     artigos = artigos.filter(a => a.id !== id);
     renderArtigosTable();
     showToast('🗑 Artigo removido.');
@@ -830,7 +824,7 @@ function clearArtigoForm() {
    MENSAGENS
 ══════════════════════════════════════════════════ */
 async function loadMensagens() {
-  mensagens = await sbGet('mensagens_contato', '', 'criado_em.desc');
+  mensagens = await apiGet('mensagens');
 }
 
 async function renderMensagens() {
@@ -878,7 +872,7 @@ async function renderMensagens() {
 
 async function marcarLida(id) {
   try {
-    await sbUpdate('mensagens_contato', `id=eq.${id}`, { lida: true });
+    await apiPatch('mensagens', { id, lida: true });
     const m = mensagens.find(m => m.id === id);
     if (m) m.lida = true;
     renderMensagens();
@@ -889,7 +883,7 @@ async function marcarLida(id) {
 async function deleteMensagem(id) {
   if (!confirm('Remover esta mensagem?')) return;
   try {
-    await sbDelete('mensagens_contato', `id=eq.${id}`);
+    await apiDelete('mensagens', id);
     mensagens = mensagens.filter(m => m.id !== id);
     renderMensagens();
     showToast('🗑 Mensagem removida.');
@@ -900,7 +894,7 @@ async function deleteMensagem(id) {
    EQUIPE
 ══════════════════════════════════════════════════ */
 async function loadEquipe() {
-  equipe = await sbGet('equipe', '', 'ordem');
+  equipe = await apiGet('equipe');
   renderEquipeTable();
 }
 
@@ -938,12 +932,12 @@ async function saveMembro() {
   try {
     const payload = { nome, oab, especialidade, cargo, bio };
     if (editingMembroId) {
-      await sbUpdate('equipe', `id=eq.${editingMembroId}`, payload);
+      await apiPatch('equipe', { id: editingMembroId, ...payload });
       const idx = equipe.findIndex(m => m.id === editingMembroId);
       if (idx > -1) equipe[idx] = { ...equipe[idx], ...payload };
       editingMembroId = null;
     } else {
-      const [row] = await sbInsert('equipe', { ...payload, ordem: equipe.length + 1 });
+      const row = await apiPost('equipe', { ...payload, ordem: equipe.length + 1 });
       equipe.push(row);
     }
     clearMembroForm();
@@ -972,7 +966,7 @@ function editMembro(id) {
 async function deleteMembro(id) {
   if (!confirm('Remover este membro?')) return;
   try {
-    await sbDelete('equipe', `id=eq.${id}`);
+    await apiDelete('equipe', id);
     equipe = equipe.filter(m => m.id !== id);
     renderEquipeTable();
     showToast('🗑 Membro removido.');
