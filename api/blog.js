@@ -13,23 +13,26 @@ export default async function handler(req, res) {
   const db = neon(process.env.DATABASE_URL);
 
   if (req.method === 'GET') {
-    const rows = await db`SELECT * FROM areas_atuacao ORDER BY ordem ASC`;
+    const isAdmin = verify(req) && req.query?.all === '1';
+    const rows = isAdmin
+      ? await db`SELECT * FROM blog_artigos ORDER BY criado_em DESC`
+      : await db`SELECT * FROM blog_artigos WHERE publicado=true ORDER BY criado_em DESC`;
     return res.status(200).json(rows);
   }
   if (!verify(req)) return res.status(401).json({ error: 'Não autorizado.' });
 
   if (req.method === 'POST') {
-    const { titulo, icone, descricao, topicos, ativa, ordem } = req.body;
-    const [row] = await db`INSERT INTO areas_atuacao (titulo,icone,descricao,topicos,ativa,ordem) VALUES (${titulo},${icone},${descricao},${topicos},${ativa ?? true},${ordem ?? 0}) RETURNING *`;
+    const { titulo, categoria, leitura, resumo, conteudo, publicado } = req.body;
+    const [row] = await db`INSERT INTO blog_artigos (titulo,categoria,leitura,resumo,conteudo,publicado) VALUES (${titulo},${categoria},${leitura},${resumo},${conteudo},${publicado ?? false}) RETURNING *`;
     return res.status(201).json(row);
   }
   if (req.method === 'PATCH') {
-    const { id, titulo, icone, descricao, topicos, ativa, ordem } = req.body;
-    await db`UPDATE areas_atuacao SET titulo=${titulo},icone=${icone},descricao=${descricao},topicos=${topicos},ativa=${ativa},ordem=${ordem} WHERE id=${id}`;
+    const { id, titulo, categoria, leitura, resumo, conteudo, publicado } = req.body;
+    await db`UPDATE blog_artigos SET titulo=${titulo},categoria=${categoria},leitura=${leitura},resumo=${resumo},conteudo=${conteudo},publicado=${publicado} WHERE id=${id}`;
     return res.status(200).json({ ok: true });
   }
   if (req.method === 'DELETE') {
-    await db`DELETE FROM areas_atuacao WHERE id=${req.body.id}`;
+    await db`DELETE FROM blog_artigos WHERE id=${req.body.id}`;
     return res.status(200).json({ ok: true });
   }
   res.status(405).end();

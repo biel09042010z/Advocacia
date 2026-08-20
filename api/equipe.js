@@ -13,23 +13,23 @@ export default async function handler(req, res) {
   const db = neon(process.env.DATABASE_URL);
 
   if (req.method === 'GET') {
-    const rows = await db`SELECT * FROM areas_atuacao ORDER BY ordem ASC`;
+    const rows = await db`SELECT * FROM equipe ORDER BY ordem ASC`;
     return res.status(200).json(rows);
   }
   if (!verify(req)) return res.status(401).json({ error: 'Não autorizado.' });
 
   if (req.method === 'POST') {
-    const { titulo, icone, descricao, topicos, ativa, ordem } = req.body;
-    const [row] = await db`INSERT INTO areas_atuacao (titulo,icone,descricao,topicos,ativa,ordem) VALUES (${titulo},${icone},${descricao},${topicos},${ativa ?? true},${ordem ?? 0}) RETURNING *`;
+    const { nome, oab, especialidade, cargo, bio, ordem } = req.body;
+    const [row] = await db`INSERT INTO equipe (nome,oab,especialidade,cargo,bio,ordem) VALUES (${nome},${oab},${especialidade},${cargo},${bio},${ordem ?? 0}) RETURNING *`;
     return res.status(201).json(row);
   }
   if (req.method === 'PATCH') {
-    const { id, titulo, icone, descricao, topicos, ativa, ordem } = req.body;
-    await db`UPDATE areas_atuacao SET titulo=${titulo},icone=${icone},descricao=${descricao},topicos=${topicos},ativa=${ativa},ordem=${ordem} WHERE id=${id}`;
+    const { id, nome, oab, especialidade, cargo, bio } = req.body;
+    await db`UPDATE equipe SET nome=${nome},oab=${oab},especialidade=${especialidade},cargo=${cargo},bio=${bio} WHERE id=${id}`;
     return res.status(200).json({ ok: true });
   }
   if (req.method === 'DELETE') {
-    await db`DELETE FROM areas_atuacao WHERE id=${req.body.id}`;
+    await db`DELETE FROM equipe WHERE id=${req.body.id}`;
     return res.status(200).json({ ok: true });
   }
   res.status(405).end();
